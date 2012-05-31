@@ -1,0 +1,16 @@
+#!/bin/bash
+
+cd src
+make clean
+make
+out="$?"
+cd ..
+if [ "$out" != "0" ]; then exit; fi
+    
+hidraw="/dev/$( realpath /sys/class/hidraw/hidraw* | grep 1BAE:014B | grep -o hidraw[0-9]$ )"
+sudo chmod +r $hidraw
+if [ "$?" == "0" ];	then 
+    cd bin/x86-Release
+    ./SocNetAnal $hidraw 
+    cd ../..
+fi

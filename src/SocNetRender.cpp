@@ -1,19 +1,19 @@
 //---------------------------------------------------------------------------
 // Includes
 //---------------------------------------------------------------------------
-#define LUMEN_CAMERA // use camera
-//#define LUMEN_BACKDROP // use backdrop.jpg tracker instead of camera
-#define LUMEN_TRACKER // Wrap 920AR tracker 
-#define LUMEN_TRACKER_USE // use the tracker
+#define SOCNET_CAMERA // use camera
+//#define SOCNET_BACKDROP // use backdrop.jpg tracker instead of camera
+#define SOCNET_TRACKER // Wrap 920AR tracker 
+#define SOCNET_TRACKER_USE // use the tracker
 
-#include "LumenRender.h"
+#include "SocNetRender.h"
 #include "Geometry.cpp"
 #include "Smooth.cpp"
 #include "Utils.h"
 #include <GL/glut.h>
 #include <GL/glu.h>
 #include <GL/gl.h>
-#ifdef LUMEN_CAMERA
+#ifdef SOCNET_CAMERA
 #include <core/core.hpp>
 #include <highgui/highgui.hpp>
 #endif
@@ -45,12 +45,6 @@ extern bool drawSkeleton;
 extern bool drawSquare;
 extern bool headView;
 extern bool doClear;
-extern bool menuEnabled;
-extern bool menuEnabledInit;
-extern bool menuScrollUp;
-extern bool menuScrollDown;
-extern bool menuClick;
-extern float menuFadeIn;
 extern XnUInt32 currentUser;
 extern bool isMouseDown;
 extern bool isUsingMouse;
@@ -63,7 +57,7 @@ extern float aa;
 
 GLUquadricObj* quadric;
 
-#ifdef LUMEN_CAMERA
+#ifdef SOCNET_CAMERA
 GLuint makeTexture(int width, int height, int channels, const GLvoid *data) {
     glEnable(GL_TEXTURE_RECTANGLE_ARB);
     GLuint texID;
@@ -99,7 +93,7 @@ boost::thread camThread;
 bool cameraInit = false;
 bool cameraLock = false;
 void initCamera() {
-    #ifdef LUMEN_BACKDROP
+    #ifdef SOCNET_BACKDROP
     frame = cv::imread("backdrop.jpg");
     #else
     capture.open(-1);
@@ -113,7 +107,7 @@ void initCamera() {
 }
 void readCamera() {
     if(cameraInit==true) {
-        #ifdef LUMEN_BACKDROP
+        #ifdef SOCNET_BACKDROP
         #else
         capture >> frame;
         #endif
@@ -121,7 +115,7 @@ void readCamera() {
     cameraLock = false;
 }
 void updateCamera() {
-    #ifdef LUMEN_BACKDROP
+    #ifdef SOCNET_BACKDROP
     #else
     if(!cameraLock) {
         cameraLock = true;
@@ -168,7 +162,7 @@ void renderCamera() {
 }
 #endif
 
-#ifdef LUMEN_TRACKER
+#ifdef SOCNET_TRACKER
 float initPitch, initYaw, initRoll;
 SmoothData *a, *b, *c;
 
@@ -284,7 +278,7 @@ void Matrix_Multiply(double a[3][3], double b[3][3],double mat[3][3])
       mat[x][y]=0;
       mat[x][y]=op[0]+op[1]+op[2];
       
-      double test=mat[x][y];
+      //double test=mat[x][y];
     }
   }
 }
@@ -623,11 +617,12 @@ void firstRead() {
     }
 }
 
+extern char* trackerDevice;
 void initTracker() {
     if(!trackerInit) {
         fprintf(stderr, "Tracker init started.\n");
-        tracker.open("/dev/hidraw2", ios::in|ios::binary);
-        #ifdef LUMEN_TRACKER_USE 
+        tracker.open(trackerDevice, ios::in|ios::binary);
+        #ifdef SOCNET_TRACKER_USE 
         firstReadThread = boost::thread(firstRead);
         #endif
     }
@@ -635,24 +630,14 @@ void initTracker() {
 #endif
 
 SmoothPoint *headpos;
-SmoothPoint *shoulderLeft, *shoulderRight;
-SmoothPoint *lastPosition, *lastPositionProj;
+SmoothPoint *RightHand, *RightHandProj, *RightElbow, *RightElbowProj;
+SmoothPoint *LeftHand, *LeftHandProj, *LeftElbow, *LeftElbowProj;
 extern bool drawingLine;
 extern bool cancelLine;
 extern float currentThickness;
 
 Line currentLine;
 Lines lines;
-
-Line *menuSquiggle;
-XnPoint3D menuHandInit;
-int menuSelected = -1;
-GLuint menuColorPic;
-cv::Mat menuColorPicData;
-XnPoint3D menuInitColorPoint;
-XnPoint3D menuColorPoint;
-GLuint menuCheckersPic;
-cv::Mat menuCheckersPicData;
 
 bool menuIsSelected = false;
 void prevBrush() {
@@ -703,8 +688,8 @@ void DrawLimb(XnUserID player, XnSkeletonJoint eJoint1, XnSkeletonJoint eJoint2)
     glVertex3f(pt[1].X, pt[1].Y, pt[1].Z);
 }
 void DrawLine(XnPoint3D p1, XnPoint3D p2) {
-    float th = 0.7;
-    glColor4f(1,1,1,1);
+    float th = 2;
+    glColor4f(0.9,0.75,0.75,1);
     glDisable(GL_LIGHTING);
     glBegin(GL_QUADS);
     glVertex3f(p1.X-th, p1.Y, p1.Z);
@@ -771,38 +756,22 @@ bool fexists(const char *filename) {
     return ifile;
 }
 
-void cleanupLumen() {
+void cleanupSocNet() {
     if(quitRequested==0) quitRequested = 1;
-    #ifdef LUMEN_TRACKER
+    #ifdef SOCNET_TRACKER
         fprintf(stderr, "Releasing tracker.\n");
-        #ifdef LUMEN_TRACKER_USE
+        #ifdef SOCNET_TRACKER_USE
         trackerThread.join();
         #endif
         tracker.close();
     #endif
-    #ifdef LUMEN_CAMERA
+    #ifdef SOCNET_CAMERA
         fprintf(stderr, "Releasing camera.\n");
         camThread.join();
         capture.release();
     #endif
-    //save();
-}
-/*
-std::string timestr(time_t t) {
-    std::stringstream strm;
-    strm << "save/"
-    strm << t;
-    strm << ".lum"
-    return strm.str();
 }
 
-void save() {
-    ofstream f;
-    f.open(timestr(time(0)));
-    lines.toFile(f);
-    f.close();
-}
-*/
 XnPoint3D convertKinect(XnPoint3D in) {
     XnPoint3D out = { -in.Z, in.X, -in.Y };
     return out;
@@ -814,9 +783,14 @@ XnPoint3D convertGlasses(XnPoint3D in) {
 
 bool hadKinect = false;
 
+const int NODES = 15;
+const int CONNS = 20;
+XnPoint3D nodes [NODES];
+XnPoint3D conns [CONNS];
+
 float maxX=-10000, minX=+10000;
 int cnt = 0;
-void renderLumen() {
+void renderSocNet() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     cnt++;
     if(firstRender) {
@@ -827,167 +801,41 @@ void renderLumen() {
      
         glDisable(GL_CULL_FACE);
         // init camera and its texture
-        #ifdef LUMEN_CAMERA
+        #ifdef SOCNET_CAMERA
         initCamera();
         #endif
         
-        //menu squiggle
-        //TODO:a se prvi "neprojectan" point sploh kdaj rabi
-        menuSquiggle = new Line(rr,gg,bb,aa, currentBrush);
+        for(int i=0; i<NODES; i++) {
+            nodes[i] = {
+                (float)(-rand()%900-900),
+                (float)(rand()%800-400),
+                (float)(rand()%400-150)
+            };
+        }
+        for(int i=0; i<CONNS; i++) {
+            int from=rand()%NODES;
+            int to=rand()%NODES;
+            if(from==to) from = (from+rand()%(NODES-1))%NODES;
+            for(int j=0; j<i; j++) {
+                if(from==conns[i].X && to==conns[i].Y) {
+                    j=0;
+                    from=rand()%NODES;
+                    to=rand()%NODES;
+                    if(from==to) from = (from+rand()%(NODES-1))%NODES;
+                }
+            }
+            
+            conns[i] = {(float)from,(float)to,0};
+        }
         
-        Vec3 dummy = Vec3(0,0,0);
-        float i=0, n=4;
-        menuSquiggle->linePoints.Add(dummy,{n*i++,+0.0f*n,0});
-        menuSquiggle->linePoints.Add(dummy,{n*i++,+0.7f*n,0});
-        menuSquiggle->linePoints.Add(dummy,{n*i++,+1.0f*n,0});
-        menuSquiggle->linePoints.Add(dummy,{n*i++,+0.6f*n,0});
-        menuSquiggle->linePoints.Add(dummy,{n*i++,+0.0f*n,0});
-        menuSquiggle->linePoints.Add(dummy,{n*i++,-0.7f*n,0});
-        menuSquiggle->linePoints.Add(dummy,{n*i++,-1.0f*n,0});
-        menuSquiggle->linePoints.Add(dummy,{n*i++,-0.6f*n,0});
-        menuSquiggle->linePoints.Add(dummy,{n*i++,+0.1f*n,0});
-        
-        menuColorPicData = makeTexture("colorscale.png", menuColorPic);
-        menuCheckersPicData = makeTexture("checkerboard.png", menuCheckersPic);
         fprintf(stderr, "Render init done.\n");
     }
     
-    #ifdef LUMEN_CAMERA
+    #ifdef SOCNET_CAMERA
     updateCamera();
     renderCamera();
     #endif
    
-    ///////
-  /*  firstRender = false;
-    glDisable(GL_LIGHTING);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(45, (640/480+0.0), 0.1, 500.0);
-    glScalef(1,1,1);
-    
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    gluLookAt(0,0,0,
-              2,0,0, // look-at vector
-              //0,-1,0);
-              0, 0, -1);// up vector 
-
-    glMultMatrixd(GL_MatrixT);
-
-    
-//    glRotatef(roll*180/M_PI, 0,0,1);
-//    glRotatef(pitch*180/M_PI, 1,0,0);
-//    glRotatef((yaw+1.5)*180/M_PI, 0,-1,0);
-
-    //glRotatef(cnt/10.0, 0,0,1);
-    
-    glPushMatrix();
-    glScalef(0.2,0.2,0.2);
-    glBegin(GL_QUADS);            
-        glColor4f(0.25,0,0,1);
-        // left
-        glNormal3f(-1, 0, 0);
-        glVertex3f(-1, 1, 1);
-        glVertex3f(-1, 1,-1);
-        glVertex3f(-1,-1,-1);
-        glVertex3f(-1,-1, 1);
-        // right
-        glNormal3f( 1, 0, 0);
-        glVertex3f( 1, 1,-1);
-        glVertex3f( 1, 1, 1);
-        glVertex3f( 1,-1, 1);
-        glVertex3f( 1,-1,-1);
-
-        glColor4f(0,0.25,0,1);
-        // top
-        glNormal3f( 0, 1, 0);
-        glVertex3f( 1, 1,-1);
-        glVertex3f(-1, 1,-1);
-        glVertex3f(-1, 1, 1);
-        glVertex3f( 1, 1, 1);
-        // bottom 
-        glNormal3f( 0,-1, 1);
-        glVertex3f( 1,-1, 1);
-        glVertex3f(-1,-1, 1);
-        glVertex3f(-1,-1,-1);
-        glVertex3f( 1,-1,-1);
-
-        glColor4f(0,0,0.25,1);
-        // front
-        glNormal3f( 0, 0, 1);
-        glVertex3f( 1, 1, 1);
-        glVertex3f(-1, 1, 1); 
-        glVertex3f(-1,-1, 1);
-        glVertex3f( 1,-1, 1);
-        // back
-        glNormal3f( 0, 0,-1);
-        glVertex3f( 1,-1,-1);
-        glVertex3f(-1,-1,-1);
-        glVertex3f(-1, 1,-1);
-        glVertex3f( 1, 1,-1);
-    glEnd();
-    glPopMatrix();
-
-    glBegin(GL_LINES);
-    glColor4f(0.75,0,0,1);
-    glVertex3d(-1, 0, 0);
-    glVertex3d(1, 0, 0);
-    glColor4f(0,0.75,0,1);
-    glVertex3d(0, -1, 0);
-    glVertex3d(0, 1, 0);
-    glColor4f(0,0,1,1);
-    glVertex3d(0, 0, -1);
-    glVertex3d(0, 0, 1);
-
-    glColor4f(1,0,0,1);
-    glVertex3d(0, 0, 0);
-    glVertex3d(getMagX(), getMagY(), getMagZ());
-
-    glColor4f(0,1,0,1);
-    glVertex3d(0, 0, 0);
-    glVertex3d(getAccX(), getAccY(), getAccZ());
-    glEnd();
-
-    glutSwapBuffers();
-    return;
-    ////////////
-
-//*/
-
-
-
-
-
-
-
-
-
-    // lines and body
-    /*glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(10, (640/480+0.0), 1.0, 5000.0);
-    glScalef(-1,1,1);
-    
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    
-    if(headpos != NULL) {
-        #ifdef LUMEN_TRACKER_USE 
-            glRotatef((yaw+1.5)*180/M_PI, 0,-1,0);
-            //glRotatef(pitch*180/M_PI, 1,0,0);
-            //glRotatef(roll*180/M_PI, 0,0,1);
-            printf("%f %f %f \n", yaw, pitch, roll);
-            gluLookAt(headpos->X(),headpos->Y(),headpos->Z(),    // camera position
-                      headpos->X(),headpos->Y(),headpos->Z()-10, // look-at vector
-                      0.0,-1.0,0.0);// up vector 
-        #else
-            gluLookAt(headpos->X(),headpos->Y(),headpos->Z(),    // camera position
-                      headpos->X(),headpos->Y(),headpos->Z()-10, // look-at vector
-                      0.0,-1.0,0.0);// up vector 
-        #endif
-    }*/
-
     //glDisable(GL_LIGHTING);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -998,85 +846,29 @@ void renderLumen() {
 
     gluLookAt(0,0,0,
               10,0,0, // look-at vector
-              //0,-1,0);
               0, 0, -1);// up vector 
     
     glMultMatrixd(GL_MatrixT);
-    glRotatef(188,0,0,1);
+    glRotatef(0*10,0,0,1); // rotation correction
     glRotatef(-5,0,1,0);
     
-    if(headpos != NULL) {
-        glTranslatef(headpos->Z(), -headpos->X(), headpos->Y());
-        //if(isMouseDown && lastPositionProj != NULL) {
-        //printf("kin head: %f %f %f\n", -headpos->Z(), headpos->X(), -headpos->Y());
-          //printf("kin  arm: %f %f %f\n", lastPositionProj->X(), lastPositionProj->Y(), lastPositionProj->Z());
-        //}
-    }
-    //printf("matrix: %f %f %f %f \n", GL_MatrixT[0], GL_MatrixT[1], GL_MatrixT[2], GL_MatrixT[3]);
-
-    /*glBegin(GL_QUADS);            
-        glColor4f(0.25,0,0,0.85);
-
-        glVertex3f(-1000, 90,    80);
-        glVertex3f(-1000, -1200, 80);
-        glVertex3f(-1000, -1200, 500);
-        glVertex3f(-1000, 90,    500);
-
-    glEnd();*/
-
-    /*glPushMatrix();
-    glScalef(20,20,20);
-    glBegin(GL_QUADS);            
-        glColor4f(0.25,0,0,0.85);
-        // left
-        glNormal3f(-1, 0, 0);
-        glVertex3f(-1, 1, 1);
-        glVertex3f(-1, 1,-1);
-        glVertex3f(-1,-1,-1);
-        glVertex3f(-1,-1, 1);
-        // right
-        glNormal3f( 1, 0, 0);
-        glVertex3f( 1, 1,-1);
-        glVertex3f( 1, 1, 1);
-        glVertex3f( 1,-1, 1);
-        glVertex3f( 1,-1,-1);
-
-        glColor4f(0,0.25,0,0.85);
-        // top
-        glNormal3f( 0, 1, 0);
-        glVertex3f( 1, 1,-1);
-        glVertex3f(-1, 1,-1);
-        glVertex3f(-1, 1, 1);
-        glVertex3f( 1, 1, 1);
-        // bottom 
-        glNormal3f( 0,-1, 1);
-        glVertex3f( 1,-1, 1);isMouseDown
-        glVertex3f(-1,-1, 1);
-        glVertex3f(-1,-1,-1);
-        glVertex3f( 1,-1,-1);
-
-        glColor4f(0,0,0.25,0.85);
-        // front
-        glNormal3f( 0, 0, 1);
-        glVertex3f( 1, 1, 1);
-
-        glVertex3f(-1, 1, 1); 
-        glVertex3f(-1,-1, 1);
-        glVertex3f( 1,-1, 1);
-        // back
-        glNormal3f( 0, 0,-1);
-
-        glVertex3f( 1,-1,-1);
-        glVertex3f(-1,-1,-1);
-        glVertex3f(-1, 1,-1);
-        glVertex3f( 1, 1,-1);
-    glEnd();
-    glPopMatrix();*/
+    if(headpos != NULL) glTranslatef(headpos->Z(), -headpos->X(), headpos->Y());
 
     if(doClear) {
         doClear = false;
         drawingLine = false;
         lines.Clear();
+    }
+    
+    for(int i=0; i<NODES; i++) {
+        glPushMatrix();
+        glTranslatef(nodes[i].X, nodes[i].Y, nodes[i].Z);
+        glColor4f(1,1,1,1);
+        gluSphere(quadric, 20, 10, 10);    
+        glPopMatrix();
+    }
+    for(int i=0; i<CONNS; i++) {
+        DrawLine(nodes[(int)conns[i].X], nodes[(int)conns[i].Y]);
     }
     
     g_Context.WaitAnyUpdateAll();
@@ -1087,56 +879,66 @@ void renderLumen() {
     
     if(nUsers>0 && currentUser>=0 && currentUser<=nUsers) {
         int i = currentUser-1;
-        XnPoint3D hand0 = GetLimbPosition(aUsers[i], XN_SKEL_RIGHT_HAND);
-        XnPoint3D elbow0 = GetLimbPosition(aUsers[i], XN_SKEL_RIGHT_ELBOW);
-        //hand0 = Vec3::makeLonger(elbow0, hand0, -100);
-        hand0 = Vec3::makeLonger(elbow0, hand0, -115);
+        {
+            // oh, wow
+            XnPoint3D handRight0 = GetLimbPosition(aUsers[i], XN_SKEL_RIGHT_HAND);
+            XnPoint3D elbowRight0 = GetLimbPosition(aUsers[i], XN_SKEL_RIGHT_ELBOW);
+            handRight0 = Vec3::makeLonger(elbowRight0, handRight0, -70);
+            XnPoint3D handRight0proj = getProj(handRight0);
+            XnPoint3D handRight = convertKinect(handRight0);
+            XnPoint3D handRightproj = convertKinect(handRight0proj);
+            XnPoint3D elbowRightproj = convertKinect(getProj(elbowRight0));
 
-        XnPoint3D hand0proj = getProj(hand0);
-        
-        XnPoint3D hand = convertKinect(hand0);
-        XnPoint3D handproj = convertKinect(hand0proj);
-        XnPoint3D elbowproj = getProj(elbow0);
-        elbowproj = convertKinect(elbowproj);
+            XnPoint3D handLeft0 = GetLimbPosition(aUsers[i], XN_SKEL_LEFT_HAND);
+            XnPoint3D elbowLeft0 = GetLimbPosition(aUsers[i], XN_SKEL_LEFT_ELBOW);
+            handLeft0 = Vec3::makeLonger(elbowLeft0, handLeft0, -70);
+            XnPoint3D handLeft0proj = getProj(handLeft0);
+            XnPoint3D handLeft = convertKinect(handLeft0);
+            XnPoint3D handLeftproj = convertKinect(handLeft0proj);
+            XnPoint3D elbowLeftproj = convertKinect(getProj(elbowLeft0));
 
-        if(firstUser) {
-            lastPosition = new SmoothPoint(hand, 20, 1);
-            lastPositionProj = new SmoothPoint(handproj, 20, 1);
-        } else {
-            lastPosition->insert(hand);
-            lastPositionProj->insert(handproj);
-        }
-
-        /*if(headpos != NULL) {
-            if(headpos->X()>maxX) maxX = headpos->X();
-            if(headpos->X()<minX) minX = headpos->X();
-            printf("(%1.2f,%1.2f,%1.2f)(%1.2f,%1.2f)\n", headpos->X(),headpos->Y(),headpos->Z(), minX, maxX);
-        }*/
-
-        if(!menuEnabled) {
-            if(drawingLine==false && isUsingMouse==true && isMouseDown==true) { // line start
-                //start new line
-                drawingLine = true;
-                currentLine = Line(rr,gg,bb,aa, currentBrush);
+            if(firstUser) {
+                int s = 25; //smoothing
+                RightHand = new SmoothPoint(handRight, s, 1);
+                RightHandProj = new SmoothPoint(handRightproj, s, 1);
+                RightElbowProj = new SmoothPoint(elbowRightproj, s, 1);
                 
-                if(lastPosition->X()!=0 && lastPosition->Y()!=0 && lastPosition->Z()!=0) {
-                    currentLine.linePoints.Add(lastPosition->get(), lastPositionProj->get(), currentThickness);
-                }
-                
-                //printf("line begin %d (%1.2f,%1.2f,%1.2f)\n", lines.Count(), lastPosition->X(),lastPosition->Y(),lastPosition->Z());
-            } else if(drawingLine==true && isUsingMouse==true && isMouseDown==false) { // line end
-                drawingLine = false;
-                
-                //printf("line end (%1.2f,%1.2f,%1.2f)\n", lastPosition->X(),lastPosition->Y(),lastPosition->Z());
-                currentLine.compileLine();
-                lines.Add(currentLine);
-            } else if(drawingLine && cancelLine) { // cancel line
-                isMouseDown = false;
-                drawingLine = false;
-            } else if(drawingLine) { // line mid
-                currentLine.linePoints.Add(lastPosition->get(), lastPositionProj->get(), currentThickness);
+                LeftHand = new SmoothPoint(handLeft, s, 1);
+                LeftHandProj = new SmoothPoint(handLeftproj, s, 1);
+                LeftElbowProj = new SmoothPoint(elbowLeftproj, s, 1);
+            } else {
+                RightHand->insert(handRight);
+                RightHandProj->insert(handRightproj);
+                RightElbowProj->insert(elbowRightproj);
+
+                LeftHand->insert(handLeft);
+                LeftHandProj->insert(handLeftproj);
+                LeftElbowProj->insert(elbowLeftproj);
             }
         }
+        if(drawingLine==false && isUsingMouse==true && isMouseDown==true) { // line start
+            //start new line
+            drawingLine = true;
+            currentLine = Line(rr,gg,bb,aa, currentBrush);
+            
+            if(RightHand->X()!=0 && RightHand->Y()!=0 && RightHand->Z()!=0) {
+                currentLine.linePoints.Add(RightHand->get(), RightHandProj->get(), currentThickness);
+            }
+            
+            printf("line begin %d (%1.2f,%1.2f,%1.2f)\n", lines.Count(), RightHand->X(),RightHand->Y(),RightHand->Z());
+        } else if(drawingLine==true && isUsingMouse==true && isMouseDown==false) { // line end
+            drawingLine = false;
+            
+            //printf("line end (%1.2f,%1.2f,%1.2f)\n", RightHand->X(),RightHand->Y(),RightHand->Z());
+            currentLine.compileLine();
+            lines.Add(currentLine);
+        } else if(drawingLine && cancelLine) { // cancel line
+            isMouseDown = false;
+            drawingLine = false;
+        } else if(drawingLine) { // line mid
+            currentLine.linePoints.Add(RightHand->get(), RightHandProj->get(), currentThickness);
+        }
+
         if(cancelLine) cancelLine = false;
         
         // render lines
@@ -1144,10 +946,11 @@ void renderLumen() {
         if(drawingLine) currentLine.renderLine();
         
         if(drawSkeleton) {
-            DrawLine(lastPositionProj->get(), elbowproj);
+            DrawLine(RightHandProj->get(), RightElbowProj->get());
+            DrawLine(LeftHandProj->get(), LeftElbowProj->get());
             
             glColor4f(rr,gg,bb,aa);
-            glTranslatef(lastPositionProj->X(), lastPositionProj->Y(), lastPositionProj->Z());
+            glTranslatef(RightHandProj->X(), RightHandProj->Y(), RightHandProj->Z());
             switch(currentBrush) {
                 case 0: {
                     float size = 3.5;
@@ -1207,7 +1010,7 @@ void renderLumen() {
                     break; 
                 }
             }
-            glTranslatef(-lastPositionProj->X(), -lastPositionProj->Y(), -lastPositionProj->Z());
+            glTranslatef(-RightHandProj->X(), -RightHandProj->Y(), -RightHandProj->Z());
             glColor4f(1,1,1,1);
             glBegin(GL_LINES);
             DrawLimb(aUsers[i], XN_SKEL_RIGHT_ELBOW, XN_SKEL_RIGHT_SHOULDER);
@@ -1215,17 +1018,17 @@ void renderLumen() {
         }
 
         XnPoint3D head = getProj(GetLimbPosition(aUsers[i], XN_SKEL_HEAD));
-        XnPoint3D sh1 = getProj(GetLimbPosition(aUsers[i], XN_SKEL_LEFT_SHOULDER));
-        XnPoint3D sh2 = getProj(GetLimbPosition(aUsers[i], XN_SKEL_RIGHT_SHOULDER));
+        //XnPoint3D sh1 = getProj(GetLimbPosition(aUsers[i], XN_SKEL_LEFT_SHOULDER));
+        //XnPoint3D sh2 = getProj(GetLimbPosition(aUsers[i], XN_SKEL_RIGHT_SHOULDER));
         if(firstUser) {
             headpos = new SmoothPoint(head, 50, 0);
             //printf("headpos (%1.2f,%1.2f,%1.2f)\n",  headpos->X(),headpos->Y(),headpos->Z());
-            shoulderLeft = new SmoothPoint(sh1, 20, 1);
-            shoulderRight = new SmoothPoint(sh2, 20, 1);
+            //shoulderLeft = new SmoothPoint(sh1, 20, 1);
+            //shoulderRight = new SmoothPoint(sh2, 20, 1);
         } else {
             headpos->insert(head);
-            shoulderLeft->insert(sh1);
-            shoulderRight->insert(sh2);
+            //shoulderLeft->insert(sh1);
+            //shoulderRight->insert(sh2);
         }
         firstUser = false;
     
@@ -1239,297 +1042,6 @@ void renderLumen() {
         
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-        
-        // menu
-        //
-        //
-        //
-        //
-        //
-        // yes yes... horrible and handcoded :)
-        if(menuEnabled) {
-            XnPoint3D lastPos = convertGlasses(lastPosition->get());
-        
-            if(menuEnabledInit) {
-                menuEnabledInit = false;
-                menuIsSelected = false;
-                menuHandInit = lastPos;
-                menuHandInit.X += 75;
-                menuClick = false;
-            }
-            if(!menuIsSelected) {
-                if(lastPos.X > menuHandInit.X+50) menuSelected = 2; 
-                else if(lastPos.X < menuHandInit.X-50) menuSelected = 0; 
-                else menuSelected = 1;
-
-                if(menuClick) {
-                    menuHandInit = lastPos;
-                    menuIsSelected = true;
-                    if(menuIsSelected==1) {
-                        menuInitColorPoint = lastPos;
-                        menuColorPoint = lastPos;
-                    }
-                    menuClick = false;
-                }
-            }
-            
-            glColor4f(0,0,0,0.75*menuFadeIn);
-            drawQuad(0,0,640,480);
-            
-            // helpful arrows
-            if(menuIsSelected) {
-                if(menuSelected==0) {
-                    glPushMatrix();
-                        glPushMatrix();
-                            glColor4f(1,1,1, 0.8);
-                            glTranslatef(80, 240-90, 0);
-                            glRotatef(90,0,0,1);
-                            drawArrow();
-                        glPopMatrix();            
-                        glPushMatrix();
-                            glColor4f(1,1,1, 0.8);
-                            glTranslatef(80, 240+90, 0);
-                            glRotatef(90,0,0,1);
-                            glScalef(-1,1,1);
-                            drawArrow();
-                        glPopMatrix();            
-                    glPopMatrix();
-                }
-                if(menuSelected>=1) {
-                    glPushMatrix();
-                    if(menuSelected==2) glTranslatef(200,0,0);
-                    glPushMatrix();
-                        glPushMatrix();
-                            glColor4f(1,1,1, 0.8);
-                            glTranslatef(80+200, 240-90, 0);
-                            glRotatef(90,0,0,1);
-                            drawArrow();
-                        glPopMatrix();            
-                        glPushMatrix();
-                            glColor4f(1,1,1, 0.8);
-                            glTranslatef(80+200, 240+90, 0);
-                            glRotatef(90,0,0,1);
-                            glScalef(-1,1,1);
-                            drawArrow();
-                        glPopMatrix();            
-                    glPopMatrix();
-                    glPushMatrix();
-                        glColor4f(1,1,1, 0.75);
-                        glTranslatef(35+200, 240+40, 0);
-                        drawArrow();
-                    glPopMatrix();            
-                    glPushMatrix();
-                        glColor4f(1,1,1, 0.75);
-                        glTranslatef(35+200+160+10, 240+40, 0);
-                        glScalef(-1,1,1);
-                        drawArrow();
-                    glPopMatrix();            
-                    glPopMatrix();
-                }
-            } else {
-                glPushMatrix();
-                    glColor4f(1,1,1, 0.75);
-                    glTranslatef(35, 240+40, 0);
-                    drawArrow();
-                glPopMatrix();            
-                glPushMatrix();
-                    glColor4f(1,1,1, 0.75);
-                    glTranslatef(620-15, 240+40, 0);
-                    glScalef(-1,1,1);
-                    drawArrow();
-                glPopMatrix();            
-            }
-
-            glPushMatrix();
-                // brush select
-                if(menuIsSelected && menuSelected==0) {
-                    if(menuScrollUp) {
-                        prevBrush();
-                        menuScrollUp = false;
-                    }
-                    if(menuScrollDown) {
-                        nextBrush();
-                        menuScrollDown = false;
-                    }
-                    
-                    
-                    if(lastPos.Y > menuHandInit.Y+90) {
-                        menuHandInit = lastPos;
-                        prevBrush();
-                    } else if(lastPos.Y < menuHandInit.Y-90) {
-                        menuHandInit = lastPos;
-                        nextBrush();
-                    }                    
-                    
-                    if(menuClick) {
-                        menuIsSelected = false;
-                        menuHandInit = lastPos;
-                        menuHandInit.X += 75;
-                        menuClick = false;
-                    }
-                }
-                
-                glTranslatef(120,0,0);
-                glPushMatrix();
-                    glTranslatef(0,240,0);
-                    if(menuSelected==0 && menuIsSelected) 
-                        glColor4f(1,1,1,0.75*menuFadeIn);
-                    else if(menuSelected==0) 
-                        glColor4f(0.5,0.5,0.5,0.75*menuFadeIn);
-                    else
-                        glColor4f(0,0,0,0.75*menuFadeIn);
-                        
-                    drawQuad(80,80);
-                    
-                    //Spooky hardcoded territory
-                    glEnable(GL_BLEND);
-                    glEnable(GL_LIGHTING);
-                    glEnable(GL_DEPTH_TEST);
-                    glMatrixMode(GL_PROJECTION);
-                    glPushMatrix();
-                    glLoadIdentity();
-                    gluPerspective(25, (640/480+0.0), 1.0, 5000.0);
-                    glScalef(-1,1,1);
-                    glMatrixMode(GL_MODELVIEW);
-                    glPushMatrix();
-                    glLoadIdentity();
-                    
-                    glTranslatef(22.25,-5,-225);
-                    glScalef(0.7,1,1);
-                    glRotatef(42,0,1,0);
-                    glRotatef(33,1,0,0);
-                    glRotatef(16,0,0,1);
-                    menuSquiggle->setColor(rr,gg,bb,aa);
-                    menuSquiggle->renderLine(currentBrush, currentThickness);
-                    
-                    glPopMatrix();                                
-                    glMatrixMode(GL_PROJECTION);
-                    glPopMatrix();
-                    glMatrixMode(GL_MODELVIEW);
-                    glDisable(GL_DEPTH_TEST);
-                    glDisable(GL_LIGHTING);
-                    glDisable(GL_BLEND);
-                glPopMatrix();
-                
-                // color select
-                if(menuIsSelected && menuSelected==1) {
-                    if(menuClick) {                        
-                        menuIsSelected = false;
-                        menuHandInit = lastPos;
-                        menuClick = false;
-                    }
-                }
-                glPushMatrix();
-                    glTranslatef(200,240,0);
-                    glEnable(GL_BLEND);
-                    glColor4f(1,1,1,1*menuFadeIn);
-                    drawTexQuad(80,80,512,menuColorPic);
-
-                    if(menuSelected==1 && menuIsSelected) 
-                        glColor4f(1,1,1,0);
-                    else if(menuSelected==1) 
-                        glColor4f(0.5,0.5,0.5,0.75*menuFadeIn);
-                    else
-                        glColor4f(0,0,0,0.75*menuFadeIn);
-                    drawQuad(80,80);
-                    glDisable(GL_BLEND);
-                    if(menuIsSelected && menuSelected==1) {
-                        menuColorPoint = lastPos;
-                        XnPoint3D mov = {
-                            (float)(-(menuInitColorPoint.X-menuColorPoint.X)/2.0),
-                            (float)((menuInitColorPoint.Y-menuColorPoint.Y)/2.0),
-                            0
-                        };
-                        if(fabs(mov.X)>78) mov.X = 78*copysign(1,mov.X);
-                        if(fabs(mov.Y)>78) mov.Y = 78*copysign(1,mov.Y);
-
-                        int x=(int)((mov.X+78)*(512/(160.0-4)));//map boxsize to texturesize
-                        int y=(int)((mov.Y+78)*(512/(160.0-4)));
-                        if(x<0) x=0; if(x>=512) x=512-1;//clamp
-                        if(y<0) y=0; if(y>=512) y=512-1;
-
-                        int step = menuColorPicData.step;
-                        int nChannels = menuColorPicData.channels();
-
-                        float B = menuColorPicData.data[y*step+x*nChannels+0]/255.0;
-                        float G = menuColorPicData.data[y*step+x*nChannels+1]/255.0;
-                        float R = menuColorPicData.data[y*step+x*nChannels+2]/255.0;
-                        rr=R; gg=G; bb=B;
-                        
-                        glTranslatef(mov.X,mov.Y,0);
-                        glColor4f(0,0,0,0.5);
-                        drawQuad(6,6);
-                        glColor4f(R,G,B,1);
-                        drawQuad(4,4);
-                    }                
-                glPopMatrix();
-                
-                // opacity/thickness select
-                if(menuIsSelected && menuSelected==2) {
-                    if(menuClick) {
-                        menuIsSelected = false;
-                        menuHandInit = lastPos;
-                        menuHandInit.X -= 75;
-                        menuClick = false;
-                    }
-                }
-                glPushMatrix();
-                    glTranslatef(400,240,0);
-                    glEnable(GL_BLEND);
-                    glColor4f(1,1,1,1*menuFadeIn);
-                    drawTexQuad(80,80,256,menuCheckersPic);
-
-                    if(menuSelected==2 && menuIsSelected) 
-                        glColor4f(0,0,0,0.5*menuFadeIn);
-                    else if(menuSelected==2) 
-                        glColor4f(0.5,0.5,0.5,0.75*menuFadeIn);
-                    else
-                        glColor4f(0,0,0,0.75*menuFadeIn);
-                        
-                    drawQuad(80,80);
-                    
-                    int x=80, y=80;
-                    glBegin(GL_QUADS);
-                        glColor4f(1,1,1,0);
-                        glVertex3f(-x,-y, 0);
-                        glVertex3f(-x,+y, 0);
-                        glColor4f(1,1,1,0.5*menuFadeIn);
-                        glVertex3f(+x,+y, 0);
-                        glVertex3f(+x,-y, 0);
-                    glEnd();//*/
-                    glDisable(GL_BLEND);
-
-                    if(menuIsSelected && menuSelected==2) {
-                        menuColorPoint = lastPos;
-                        XnPoint3D mov = {
-                            (float)(-(menuInitColorPoint.X-menuColorPoint.X)/1.5),
-                            (float)((menuInitColorPoint.Y-menuColorPoint.Y)/1.5),
-                            0
-                        };
-                        if(fabs(mov.X)>78) mov.X = 78*copysign(1,mov.X);
-                        if(fabs(mov.Y)>78) mov.Y = 78*copysign(1,mov.Y);
-                        glTranslatef(mov.X,mov.Y,0);
-                        glColor4f(0,0,0,0.5);
-                        drawQuad(6,6);
-                        glColor4f(1,1,1,1);
-                        drawQuad(4,4);
-                        aa=(mov.X+78)/(78*2.0);
-                        if(aa < 0.15) aa=0.1;
-                        currentThickness=0.5+((mov.Y+78)/(78*2.0))*1.75;
-                    }
-                    
-                glPopMatrix();   
-            glPopMatrix();
-            if(menuFadeIn<0.9) menuFadeIn += 0.04; else menuFadeIn = 1;
-        } else if(menuFadeIn > 0) {
-            menuFadeIn -= 0.04;
-            glColor4f(0,0,0,0.75*menuFadeIn);
-            drawQuad(0,0,640,480);
-        }
-        //cancel unhandled "events"
-        menuClick = false;
-        menuScrollUp = false;
-        menuScrollDown = false;        
         
         //glDisable(GL_BLEND);
         if(drawSquare) {

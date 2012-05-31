@@ -7,7 +7,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "LumenRender.h"
+#include "SocNetRender.h"
 #include "Utils.h"
 #include <GL/glut.h>
 #include <map>
@@ -33,12 +33,6 @@ bool drawSquare = TRUE;
 int quitRequested = 0;
 bool headView = TRUE;
 bool doClear = FALSE;
-bool menuEnabled = FALSE;
-bool menuEnabledInit = FALSE;
-bool menuScrollUp = FALSE;
-bool menuScrollDown = FALSE;
-bool menuClick = FALSE;
-float menuFadeIn = 0.0;
 bool isMouseDown = FALSE;
 bool isUsingMouse = TRUE;
 int g_TestVar = -2;
@@ -176,8 +170,8 @@ void LoadCalibration() {
 }
 
 void CleanupExit() {
-    fprintf(stderr, "Lumen Cleanup\n");
-    cleanupLumen();
+    fprintf(stderr, "SocNet Cleanup\n");
+    cleanupSocNet();
     fprintf(stderr, "OpenNI Cleanup\n");
     g_ScriptNode.Release();
     g_Context.Release();
@@ -192,7 +186,7 @@ bool kinectInit = false;
 
 // this function is called each frame
 void glutDisplay(void) {
-    if(kinectInit) renderLumen();
+    if(kinectInit) renderSocNet();
 }
 
 void glutIdle(void) {
@@ -225,23 +219,16 @@ void processMouse(int button, int state, int x, int y) {
         //printf("%d\n", button);
         if(button == GLUT_LEFT_BUTTON) {
             isMouseDown = TRUE;
-            menuClick = TRUE;
             if(rr==0&&gg==0&&bb==0) randomColor(rr,gg,bb);
         } else if(button == GLUT_RIGHT_BUTTON) {
             if(drawingLine) {
                 cancelLine = true;
-            } else {
-                menuEnabled = !menuEnabled;
-                if(menuEnabled) {
-                    menuFadeIn = 0;
-                    menuEnabledInit = true;
-                }
             }            
         } else if(button == GLUT_MIDDLE_BUTTON) {
             randomColor(rr,gg,bb);
         }
         else if(button == 4) {//UP
-            menuScrollUp = TRUE;
+            //menuScrollUp = TRUE;
             /*if(!menuEnabled) {
                 currentThickness += 0.1;
                 if(currentThickness > 2) {
@@ -249,7 +236,7 @@ void processMouse(int button, int state, int x, int y) {
                 }
             }*/
         } else if(button == 3) {//DOWN
-            menuScrollDown = TRUE;
+            //menuScrollDown = TRUE;
            /*if(!menuEnabled) {
                 currentThickness -= 0.1;
                 if(currentThickness < 0.2) {
@@ -269,10 +256,10 @@ void glInit(int* pargc, char** argv) {
     glutInit(pargc, argv);
     glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
     glutInitWindowSize(1024, 768);
-     glutCreateWindow ("Lumen");
+     glutCreateWindow ("SocNet");
     glutFullScreen();
     glutSetCursor(GLUT_CURSOR_NONE);
-    //lumen init
+    //SocNet init
     randomColor(rr,gg,bb);
     //currentBrush = randInt(brushCount);    
 
@@ -337,12 +324,21 @@ void ctrlChandler(int s){
    quitRequested = 1;
 }
 
+char* trackerDevice;
+
 int main(int argc, char** argv) {
+    if(argc == 1) {
+        fprintf(stderr, "No device set\n");
+        return 1;
+    } else {
+        trackerDevice = argv[1];
+    }
+    
     srand(time(NULL));
     clickTimer = time(0);
-    #define LUMEN_TRACKER
-    #define LUMEN_TRACKER_USE
-    #ifdef LUMEN_TRACKER
+    #define SocNet_TRACKER
+    #define SocNet_TRACKER_USE
+    #ifdef SocNet_TRACKER
     initTracker();
     #endif
     
@@ -353,7 +349,7 @@ int main(int argc, char** argv) {
 
     XnStatus nRetVal = XN_STATUS_OK;
     
-    if(argc > 1) {
+    /*if(argc > 1) {
         nRetVal = g_Context.Init();
         CHECK_RC(nRetVal, "Init");
         nRetVal = g_Context.OpenFileRecording(argv[1], g_Player);
@@ -361,7 +357,7 @@ int main(int argc, char** argv) {
             printf("Can't open recording %s: %s\n", argv[1], xnGetStatusString(nRetVal));
             return 2;
         }
-    } else {
+    } else */{
         xn::EnumerationErrors errors;
         nRetVal = g_Context.InitFromXmlFile(SAMPLE_XML_PATH, g_ScriptNode, &errors);
         if(nRetVal == XN_STATUS_NO_NODE_PRESENT) {
