@@ -1,5 +1,5 @@
-#ifndef LUMEN_GEOMETRY
-#define LUMEN_GEOMETRY
+#ifndef SOCNET_GEOMETRY
+#define SOCNET_GEOMETRY
 #include <stdio.h>
 #include <string>
 #include <map>

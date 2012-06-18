@@ -1,5 +1,5 @@
-#ifndef LUMEN_UTILS
-#define LUMEN_UTILS
+#ifndef SOCNET_UTILS
+#define SOCNET_UTILS
     #include <time.h>
 
     clock_t getTime();
