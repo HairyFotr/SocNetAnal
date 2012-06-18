@@ -12,6 +12,6 @@ USED_LIBS += glut OpenNI GLU XnVNite_1_5_2
 CFLAGS += -lml -lcvaux -lhighgui -lcv -lcxcore -std=gnu++0x -Wall
 LDFLAGS += `pkg-config --libs opencv` -lboost_thread-mt
 
-LIB_DIRS += /usr/lib
+OPENNI=../lib/OpenNI
 
-include ../lib/OpenNI-Bin-Dev-Linux-x86-v1.5.2.23/Samples/Build/Common/CommonCppMakefile
+include $(OPENNI)/Samples/Build/Common/CommonCppMakefile

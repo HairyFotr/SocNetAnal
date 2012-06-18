@@ -9,4 +9,8 @@
     int randInt(int lim);
     void randomColor(float& r, float& g, float& b);
 
+    float min(float v1, float v2);
+    float max(float v1, float v2);
+    float clamp(float val, float min, float max);
+
 #endif

@@ -94,7 +94,7 @@ bool cameraInit = false;
 bool cameraLock = false;
 void initCamera() {
     #ifdef SOCNET_BACKDROP
-    frame = cv::imread("backdrop.jpg");
+    frame = cv::imread("../backdrop.jpg");
     #else
     capture.open(-1);
     capture >> frame;
@@ -687,9 +687,7 @@ void DrawLimb(XnUserID player, XnSkeletonJoint eJoint1, XnSkeletonJoint eJoint2)
     glVertex3f(pt[0].X, pt[0].Y, pt[0].Z);
     glVertex3f(pt[1].X, pt[1].Y, pt[1].Z);
 }
-void DrawLine(XnPoint3D p1, XnPoint3D p2) {
-    float th = 2;
-    glColor4f(0.9,0.75,0.75,1);
+void DrawLine2(XnPoint3D p1, XnPoint3D p2, float th) {
     glDisable(GL_LIGHTING);
     glBegin(GL_QUADS);
     glVertex3f(p1.X-th, p1.Y, p1.Z);
@@ -699,6 +697,12 @@ void DrawLine(XnPoint3D p1, XnPoint3D p2) {
     glEnd();
     glEnable(GL_LIGHTING);
 }
+void DrawLine(XnPoint3D p1, XnPoint3D p2) {
+    glColor4f(0.9,0.75,0.75,1);
+    float th = 2;
+    DrawLine2(p1,p2,th);
+}
+
 
 void drawQuad(float x, float y) {
     glBegin(GL_QUADS);
@@ -783,10 +787,62 @@ XnPoint3D convertGlasses(XnPoint3D in) {
 
 bool hadKinect = false;
 
-const int NODES = 15;
-const int CONNS = 20;
+const int NODES = 400;
+const int CONNS = 200;
 XnPoint3D nodes [NODES];
 XnPoint3D conns [CONNS];
+XnPoint3D color [NODES];
+float sizes [NODES];
+int nodeI=-1;//selected node
+
+bool graphGenerated = false;
+void generateGraph(XnPoint3D center) {
+    for(int i=0; i<NODES; i++) {
+        /*nodes[i] = {
+            (float)(-rand()%900-900),
+            (float)(rand()%800-400),
+            (float)(rand()%400-150)
+        };*/
+        int around=1000;
+        nodes[i] = {
+            center.X+rand()%around-around/2,
+            center.Y+rand()%around-around/2,
+            center.Z+rand()%around-around/2
+        };
+        float r,g,b;
+        randomColor(r,g,b);
+        color[i] = {r,g,b};
+        sizes[i] = 10+rand01()*10;
+    }
+    for(int i=0; i<CONNS; i++) {
+        int from=rand()%NODES;
+        int to=rand()%NODES;
+        if(from==to) from = (from+rand()%(NODES-1))%NODES;
+        for(int j=0; j<i; j++) {
+            if(from==conns[i].X && to==conns[i].Y) {
+                j=0;
+                from=rand()%NODES;
+                to=rand()%NODES;
+                if(from==to) from = (from+rand()%(NODES-1))%NODES;
+            }
+        }
+        
+        conns[i] = {(float)from,(float)to,0};
+    }
+    graphGenerated = true;
+}
+
+void drawBall(XnPoint3D p, float size)
+{
+    glPushMatrix();
+    glTranslatef(p.X, p.Y, p.Z);
+    //float shade = clamp(dist/500, 0, 1);
+    //float mixing = 0.7;
+    gluSphere(quadric, size, 25, 25);    
+    glPopMatrix();
+}
+
+
 
 float maxX=-10000, minX=+10000;
 int cnt = 0;
@@ -798,35 +854,12 @@ void renderSocNet() {
         // init quadric object
         quadric = gluNewQuadric();
         gluQuadricNormals(quadric, GLU_SMOOTH);
-     
+        
         glDisable(GL_CULL_FACE);
         // init camera and its texture
         #ifdef SOCNET_CAMERA
         initCamera();
         #endif
-        
-        for(int i=0; i<NODES; i++) {
-            nodes[i] = {
-                (float)(-rand()%900-900),
-                (float)(rand()%800-400),
-                (float)(rand()%400-150)
-            };
-        }
-        for(int i=0; i<CONNS; i++) {
-            int from=rand()%NODES;
-            int to=rand()%NODES;
-            if(from==to) from = (from+rand()%(NODES-1))%NODES;
-            for(int j=0; j<i; j++) {
-                if(from==conns[i].X && to==conns[i].Y) {
-                    j=0;
-                    from=rand()%NODES;
-                    to=rand()%NODES;
-                    if(from==to) from = (from+rand()%(NODES-1))%NODES;
-                }
-            }
-            
-            conns[i] = {(float)from,(float)to,0};
-        }
         
         fprintf(stderr, "Render init done.\n");
     }
@@ -849,26 +882,16 @@ void renderSocNet() {
               0, 0, -1);// up vector 
     
     glMultMatrixd(GL_MatrixT);
-    glRotatef(0*10,0,0,1); // rotation correction
-    glRotatef(-5,0,1,0);
+    glRotatef(25,0,0,1); // rotation correction
+    glRotatef(-8,0,1,0);
     
-    if(headpos != NULL) glTranslatef(headpos->Z(), -headpos->X(), headpos->Y());
+    
+    if(headpos != NULL) glTranslatef(headpos->Z(), -headpos->X(), headpos->Y()+70);
 
     if(doClear) {
         doClear = false;
         drawingLine = false;
         lines.Clear();
-    }
-    
-    for(int i=0; i<NODES; i++) {
-        glPushMatrix();
-        glTranslatef(nodes[i].X, nodes[i].Y, nodes[i].Z);
-        glColor4f(1,1,1,1);
-        gluSphere(quadric, 20, 10, 10);    
-        glPopMatrix();
-    }
-    for(int i=0; i<CONNS; i++) {
-        DrawLine(nodes[(int)conns[i].X], nodes[(int)conns[i].Y]);
     }
     
     g_Context.WaitAnyUpdateAll();
@@ -883,7 +906,7 @@ void renderSocNet() {
             // oh, wow
             XnPoint3D handRight0 = GetLimbPosition(aUsers[i], XN_SKEL_RIGHT_HAND);
             XnPoint3D elbowRight0 = GetLimbPosition(aUsers[i], XN_SKEL_RIGHT_ELBOW);
-            handRight0 = Vec3::makeLonger(elbowRight0, handRight0, -70);
+            handRight0 = Vec3::makeLonger(elbowRight0, handRight0, -170-27);
             XnPoint3D handRight0proj = getProj(handRight0);
             XnPoint3D handRight = convertKinect(handRight0);
             XnPoint3D handRightproj = convertKinect(handRight0proj);
@@ -891,7 +914,7 @@ void renderSocNet() {
 
             XnPoint3D handLeft0 = GetLimbPosition(aUsers[i], XN_SKEL_LEFT_HAND);
             XnPoint3D elbowLeft0 = GetLimbPosition(aUsers[i], XN_SKEL_LEFT_ELBOW);
-            handLeft0 = Vec3::makeLonger(elbowLeft0, handLeft0, -70);
+            handLeft0 = Vec3::makeLonger(elbowLeft0, handLeft0, -170-27);
             XnPoint3D handLeft0proj = getProj(handLeft0);
             XnPoint3D handLeft = convertKinect(handLeft0);
             XnPoint3D handLeftproj = convertKinect(handLeft0proj);
@@ -916,6 +939,8 @@ void renderSocNet() {
                 LeftElbowProj->insert(elbowLeftproj);
             }
         }
+
+        /*
         if(drawingLine==false && isUsingMouse==true && isMouseDown==true) { // line start
             //start new line
             drawingLine = true;
@@ -944,7 +969,86 @@ void renderSocNet() {
         // render lines
         for(int l = 0; l < lines.Count(); l++) lines[l].renderLine();
         if(drawingLine) currentLine.renderLine();
+        */
         
+        XnPoint3D head = getProj(GetLimbPosition(aUsers[i], XN_SKEL_HEAD));
+        if(firstUser) {
+            headpos = new SmoothPoint(head, 50, 0);
+            generateGraph(convertKinect(headpos->get()));
+        } else {
+            headpos->insert(head);
+        }
+        firstUser = false;
+
+        if(graphGenerated) {
+            float minDist=100000000;
+            int minDistI=0;
+            bool visible [NODES];
+            for(int i=0; i<NODES; i++) {
+                float dist = 
+                    abs(RightHand->get().X-nodes[i].X) +
+                    abs(RightHand->get().Y-nodes[i].Y) +
+                    abs(RightHand->get().Z-nodes[i].Z);
+                if(dist < minDist) { minDist = dist; minDistI = i; }
+                
+                visible[i] = (RightHand->get().Z > nodes[i].Z);
+                
+                glColor4f(
+                    color[i].X,//*mixing + shade*(1-mixing),
+                    color[i].Y,//*mixing + shade*(1-mixing),
+                    color[i].Z,//*mixing + shade*(1-mixing),
+                    0.75//visible[i]?1:0.5
+                );
+                drawBall(nodes[i], sizes[i]);
+            }
+            if(isMouseDown) {
+                if(nodeI==-1) nodeI = minDistI; else minDistI = nodeI;
+                int i = nodeI;
+                float alp = 0.8;
+                nodes[i].X = nodes[i].X*alp+RightHand->get().X*(1-alp);
+                nodes[i].Y = nodes[i].Y*alp+RightHand->get().Y*(1-alp);
+                nodes[i].Z = nodes[i].Z*alp+RightHand->get().Z*(1-alp);
+            } else {
+                nodeI = -1;
+            }
+            
+            for(int i=0; i<CONNS; i++) {
+                int i1 = (int)conns[i].X, i2 = (int)conns[i].Y;
+                XnPoint3D node1 = { nodes[i1].X, nodes[i1].Y, nodes[i1].Z };
+                XnPoint3D node2 = { nodes[i2].X, nodes[i2].Y, nodes[i2].Z };
+                if(i1==nodeI || i2==nodeI)
+                    glColor4f(1,1,1,0.95);
+                else                
+                    glColor4f(1,1,1,0.65);
+                
+                {
+/*                    int limit = 10;
+                    while(!visible[i1] && limit-->0) {
+                        node1 = Vec3::makeLonger(node2, node1, -5);
+                        visible[i1] = (RightHand->get().Z > nodes[i1].Z);
+                    }
+                    if(limit>0) printf("sucess!");
+                    limit = 10;*/
+                    /*while(!visible[i2] && limit-->0) {
+                        node2 = Vec3::makeLonger(node1, node2, -5);
+                        visible[i2] = (RightHand->get().Z > nodes[i2].Z);
+                    }*/
+                    DrawLine2(node1, node2, 1);
+                }
+            }
+        
+            glColor4f(
+                0.15,//*mixing + shade*(1-mixing),
+                0.15,//*mixing + shade*(1-mixing),
+                0.15,//*mixing + shade*(1-mixing),
+                0.5//visible[i]?1:0.5
+            );
+            drawBall(nodes[minDistI], sizes[minDistI]+4.5);
+        }
+        
+        glColor4f(1,0.7,0.7,0.45);
+        DrawLine2(RightHandProj->get(), RightElbowProj->get(), 4);
+        /*
         if(drawSkeleton) {
             DrawLine(RightHandProj->get(), RightElbowProj->get());
             DrawLine(LeftHandProj->get(), LeftElbowProj->get());
@@ -1015,24 +1119,10 @@ void renderSocNet() {
             glBegin(GL_LINES);
             DrawLimb(aUsers[i], XN_SKEL_RIGHT_ELBOW, XN_SKEL_RIGHT_SHOULDER);
             glEnd();
-        }
+        }*/
 
-        XnPoint3D head = getProj(GetLimbPosition(aUsers[i], XN_SKEL_HEAD));
-        //XnPoint3D sh1 = getProj(GetLimbPosition(aUsers[i], XN_SKEL_LEFT_SHOULDER));
-        //XnPoint3D sh2 = getProj(GetLimbPosition(aUsers[i], XN_SKEL_RIGHT_SHOULDER));
-        if(firstUser) {
-            headpos = new SmoothPoint(head, 50, 0);
-            //printf("headpos (%1.2f,%1.2f,%1.2f)\n",  headpos->X(),headpos->Y(),headpos->Z());
-            //shoulderLeft = new SmoothPoint(sh1, 20, 1);
-            //shoulderRight = new SmoothPoint(sh2, 20, 1);
-        } else {
-            headpos->insert(head);
-            //shoulderLeft->insert(sh1);
-            //shoulderRight->insert(sh2);
-        }
-        firstUser = false;
     
-
+        /*
         // user interface
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_LIGHTING);
@@ -1067,7 +1157,7 @@ void renderSocNet() {
         
         glEnable(GL_LIGHTING);
         glEnable(GL_DEPTH_TEST);
-        hadKinect = true;
+        hadKinect = true;*/
     } else {
         if(hadKinect && time(0)-15 > clickTimer) {
             quitRequested = 1;

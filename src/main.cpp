@@ -256,7 +256,7 @@ void glInit(int* pargc, char** argv) {
     glutInit(pargc, argv);
     glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
     glutInitWindowSize(1024, 768);
-     glutCreateWindow ("SocNet");
+    glutCreateWindow ("SocNet");
     glutFullScreen();
     glutSetCursor(GLUT_CURSOR_NONE);
     //SocNet init
@@ -310,7 +310,7 @@ void glInit(int* pargc, char** argv) {
     glEnable(GL_TEXTURE_2D);
 }
 
-#define SAMPLE_XML_PATH "OpenNIConfig.xml"
+#define CONFIG_XML_PATH "../OpenNIConfig.xml"
 
 #define CHECK_RC(nRetVal, what)                                      \
     if(nRetVal != XN_STATUS_OK) {                                    \
@@ -336,9 +336,9 @@ int main(int argc, char** argv) {
     
     srand(time(NULL));
     clickTimer = time(0);
-    #define SocNet_TRACKER
-    #define SocNet_TRACKER_USE
-    #ifdef SocNet_TRACKER
+    #define SOCNET_TRACKER
+    #define SOCNET_TRACKER_USE
+    #ifdef SOCNET_TRACKER
     initTracker();
     #endif
     
@@ -359,7 +359,7 @@ int main(int argc, char** argv) {
         }
     } else */{
         xn::EnumerationErrors errors;
-        nRetVal = g_Context.InitFromXmlFile(SAMPLE_XML_PATH, g_ScriptNode, &errors);
+        nRetVal = g_Context.InitFromXmlFile(CONFIG_XML_PATH, g_ScriptNode, &errors);
         if(nRetVal == XN_STATUS_NO_NODE_PRESENT) {
             XnChar strError[1024];
             errors.ToString(strError, 1024);

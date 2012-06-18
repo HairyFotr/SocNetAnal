@@ -1,0 +1,17 @@
+OBOGATENA RESNIČNOST ZA INTERAKTIVNO ANALIZO OMREŽIJ
+
+Matic Potočnik
+Marko Tatić
+Pavel Stare
+Mark Rolih
+Oton Žlindra
+
+Naša naloga je bila razviti sistem, ki s pomočjo obogatene resničnosti, omogoča hitro in učinkovito preiskovanje omrežij.
+Uporabili smo Microsoft Kinect za zaznavanje položaja telesa uporabnika, ter 3D očala Vuzix Wrap 920 AR, ki z mini zasloni in dodatnimi senzorji za nagib glave omogočajo uporabniku da vstopi v obogateno resničnost.
+
+Razvili smo prototip, pri katerem s premikanjem rok in klikanjem miške lahko premikamo vozlišča omrežja po prostoru. Za implementacijo smo priredili izvorno kodo projekta Lumen, ki ga je en izmed članov ekipe razvijal skupaj z umetnikom Dominikom Mahničem. 
+
+Kaj bi lahko v nadaljevanju naredili, da bi sistem izboljšali?
+Lahko bi povečali natančnost zaznavanja z uporabo vizualnih markerjev in lahko bi izbolšali predstavitev grafov z uporabo namenskih knjižnic. Tu smo zaeenkrat naredili pregled obstoječih rešitev, med katerimi bi omenili odprtokodno knjižnico za grafe Tulip, ter sisteme za delo z markerji ARToolKit in ARTag. Naslednja stvar, ki bi jo lahko izboljšali pa je interakcija s sistemom -- namesto klikanja z miško bi sistem lahko upravljali z gestami rok, kar nekatera ogrodja za Microsoft Kinect že omogočajo.
+
+Predstavitev: http://www.youtube.com/watch?v=HrGo53xOepY
