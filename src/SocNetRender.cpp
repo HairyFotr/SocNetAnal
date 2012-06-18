@@ -595,15 +595,6 @@ void firstRead() {
         tracker.read(trackerBlock, 42);
         if(trackerBlock16[0] == -32767) {
             clock_gettime(CLOCK_REALTIME, &timer);
-            /*int smoothlen=10;
-            a = new SmoothData(0,smoothlen,0);
-            b = new SmoothData(0,smoothlen,0);
-            c = new SmoothData(0,smoothlen,0);
-            trackerInit = true;
-            for(int i=0; i<smoothlen/2; i++) {
-                tracker.read(trackerBlock, 42);
-                updateTracker();
-            }*/
             trackerInit = true;
             fprintf(stderr, "Tracker initialized.\n");
             trackerThread = boost::thread(readTracker);
@@ -632,8 +623,6 @@ void initTracker() {
 SmoothPoint *headpos;
 SmoothPoint *RightHand, *RightHandProj, *RightElbow, *RightElbowProj;
 SmoothPoint *LeftHand, *LeftHandProj, *LeftElbow, *LeftElbowProj;
-extern bool drawingLine;
-extern bool cancelLine;
 extern float currentThickness;
 
 Line currentLine;
@@ -735,31 +724,6 @@ void drawTexQuad(float x, float y, int size, GLuint texID) {
     glDisable(GL_TEXTURE_2D);
 }
 
-void drawArrow(float size) {
-    glScalef(1.1*size,4*size,1*size);
-    // 25x20
-    glBegin(GL_QUADS);
-        glVertex3f(0,0, 0);
-        glVertex3f(-10,0, 0);
-        glVertex3f(-25,-10, 0);
-        glVertex3f(-15,-10, 0);
-    glEnd();
-    glBegin(GL_QUADS);
-        glVertex3f(-25,-10, 0);
-        glVertex3f(-10,-20, 0);
-        glVertex3f(0,-20, 0);
-        glVertex3f(-15,-10, 0);
-    glEnd();
-}
-void drawArrow() {
-    drawArrow(1);
-}
-
-bool fexists(const char *filename) {
-    ifstream ifile(filename);
-    return ifile;
-}
-
 void cleanupSocNet() {
     if(quitRequested==0) quitRequested = 1;
     #ifdef SOCNET_TRACKER
@@ -784,42 +748,85 @@ XnPoint3D convertGlasses(XnPoint3D in) {
     XnPoint3D out = { in.Y, -in.Z, -in.X };
     return out;
 }
+float distance(XnPoint3D p1, XnPoint3D p2) {
+    return
+        abs(p1.X-p2.X) +
+        abs(p1.Y-p2.Y) +
+        abs(p1.Z-p2.Z);
+}
 
 bool hadKinect = false;
 
+
+struct Conn {
+    int src;
+    int dst;
+};
+struct Color {
+    float R;
+    float G;
+    float B;
+};
+struct Node {
+    XnPoint3D pos;
+    float size;
+    Color color;
+};
+
 const int NODES = 400;
 const int CONNS = 200;
-XnPoint3D nodes [NODES];
-XnPoint3D conns [CONNS];
-XnPoint3D color [NODES];
-float sizes [NODES];
+Node nodes [NODES];
+Conn conns [CONNS];
 int nodeI=-1;//selected node
 
 bool graphGenerated = false;
-void generateGraph(XnPoint3D center) {
+boost::thread graphThread;
+XnPoint3D graphCenter;
+void generateGraph() {
     for(int i=0; i<NODES; i++) {
-        /*nodes[i] = {
-            (float)(-rand()%900-900),
-            (float)(rand()%800-400),
-            (float)(rand()%400-150)
-        };*/
-        int around=1000;
-        nodes[i] = {
-            center.X+rand()%around-around/2,
-            center.Y+rand()%around-around/2,
-            center.Z+rand()%around-around/2
-        };
+        float range=1000;
+        float bestDist=0;
+        XnPoint3D bestDistP = {1,1,1};
+        if(i==0) {
+            bestDistP = {
+                graphCenter.X,
+                graphCenter.Y,
+                graphCenter.Z
+            };
+        } else for(int k=0; k<100; k++) {
+            XnPoint3D randP = {
+                graphCenter.X+rand01()*range-range/2.0f,
+                graphCenter.Y+rand01()*range-range/2.0f,
+                graphCenter.Z+rand01()*range-range/2.0f
+            };
+            printf("%f,  %f,  %f\n", randP.X, randP.Y, randP.Z);
+            float dist=100000;
+            XnPoint3D distP = {1,1,1};
+            for(int j=0; j<i-1; j++) {
+                float currDist = distance(randP, nodes[j].pos);
+                if(currDist < dist) {
+                    dist = currDist;
+                    distP = { randP.X, randP.Y, randP.Z };
+                }
+            }
+            if(dist > bestDist) {
+                bestDist = dist;
+                bestDistP = { distP.X, distP.Y, distP.Z };
+            }
+        }
+        printf("%f,  %f,  %f\n", bestDistP.X, bestDistP.Y, bestDistP.Z);
+        nodes[i].pos = { bestDistP.X, bestDistP.Y, bestDistP.Z };
+        nodes[i].size = 10+rand01()*10;
         float r,g,b;
         randomColor(r,g,b);
-        color[i] = {r,g,b};
-        sizes[i] = 10+rand01()*10;
+        nodes[i].color = {r,g,b};
     }
     for(int i=0; i<CONNS; i++) {
         int from=rand()%NODES;
         int to=rand()%NODES;
         if(from==to) from = (from+rand()%(NODES-1))%NODES;
         for(int j=0; j<i; j++) {
-            if(from==conns[i].X && to==conns[i].Y) {
+            if(from==conns[i].src && to==conns[i].dst) {
                 j=0;
                 from=rand()%NODES;
                 to=rand()%NODES;
@@ -827,22 +834,21 @@ void generateGraph(XnPoint3D center) {
             }
         }
         
-        conns[i] = {(float)from,(float)to,0};
+        conns[i] = {from,to};
     }
     graphGenerated = true;
 }
 
-void drawBall(XnPoint3D p, float size)
-{
+void drawBall(XnPoint3D pos, float size) {
     glPushMatrix();
-    glTranslatef(p.X, p.Y, p.Z);
-    //float shade = clamp(dist/500, 0, 1);
-    //float mixing = 0.7;
-    gluSphere(quadric, size, 25, 25);    
+    glTranslatef(pos.X, pos.Y, pos.Z);
+    gluSphere(quadric, size, 25, 25);
     glPopMatrix();
 }
-
-
+void drawNode(Node n) {
+    glColor4f(n.color.R, n.color.G, n.color.B, 0.75);
+    drawBall(n.pos, n.size);
+}
 
 float maxX=-10000, minX=+10000;
 int cnt = 0;
@@ -890,7 +896,6 @@ void renderSocNet() {
 
     if(doClear) {
         doClear = false;
-        drawingLine = false;
         lines.Clear();
     }
     
@@ -940,41 +945,11 @@ void renderSocNet() {
             }
         }
 
-        /*
-        if(drawingLine==false && isUsingMouse==true && isMouseDown==true) { // line start
-            //start new line
-            drawingLine = true;
-            currentLine = Line(rr,gg,bb,aa, currentBrush);
-            
-            if(RightHand->X()!=0 && RightHand->Y()!=0 && RightHand->Z()!=0) {
-                currentLine.linePoints.Add(RightHand->get(), RightHandProj->get(), currentThickness);
-            }
-            
-            printf("line begin %d (%1.2f,%1.2f,%1.2f)\n", lines.Count(), RightHand->X(),RightHand->Y(),RightHand->Z());
-        } else if(drawingLine==true && isUsingMouse==true && isMouseDown==false) { // line end
-            drawingLine = false;
-            
-            //printf("line end (%1.2f,%1.2f,%1.2f)\n", RightHand->X(),RightHand->Y(),RightHand->Z());
-            currentLine.compileLine();
-            lines.Add(currentLine);
-        } else if(drawingLine && cancelLine) { // cancel line
-            isMouseDown = false;
-            drawingLine = false;
-        } else if(drawingLine) { // line mid
-            currentLine.linePoints.Add(RightHand->get(), RightHandProj->get(), currentThickness);
-        }
-
-        if(cancelLine) cancelLine = false;
-        
-        // render lines
-        for(int l = 0; l < lines.Count(); l++) lines[l].renderLine();
-        if(drawingLine) currentLine.renderLine();
-        */
-        
         XnPoint3D head = getProj(GetLimbPosition(aUsers[i], XN_SKEL_HEAD));
         if(firstUser) {
             headpos = new SmoothPoint(head, 50, 0);
-            generateGraph(convertKinect(headpos->get()));
+            graphCenter = convertKinect(headpos->get());
+            graphThread = boost::thread(generateGraph);
         } else {
             headpos->insert(head);
         }
@@ -983,58 +958,28 @@ void renderSocNet() {
         if(graphGenerated) {
             float minDist=100000000;
             int minDistI=0;
-            bool visible [NODES];
             for(int i=0; i<NODES; i++) {
-                float dist = 
-                    abs(RightHand->get().X-nodes[i].X) +
-                    abs(RightHand->get().Y-nodes[i].Y) +
-                    abs(RightHand->get().Z-nodes[i].Z);
+                float dist = distance(RightHand->get(), nodes[i].pos);
                 if(dist < minDist) { minDist = dist; minDistI = i; }
                 
-                visible[i] = (RightHand->get().Z > nodes[i].Z);
-                
-                glColor4f(
-                    color[i].X,//*mixing + shade*(1-mixing),
-                    color[i].Y,//*mixing + shade*(1-mixing),
-                    color[i].Z,//*mixing + shade*(1-mixing),
-                    0.75//visible[i]?1:0.5
-                );
-                drawBall(nodes[i], sizes[i]);
+                drawNode(nodes[i]);
             }
             if(isMouseDown) {
                 if(nodeI==-1) nodeI = minDistI; else minDistI = nodeI;
                 int i = nodeI;
                 float alp = 0.8;
-                nodes[i].X = nodes[i].X*alp+RightHand->get().X*(1-alp);
-                nodes[i].Y = nodes[i].Y*alp+RightHand->get().Y*(1-alp);
-                nodes[i].Z = nodes[i].Z*alp+RightHand->get().Z*(1-alp);
+                nodes[i].pos = {
+                    nodes[i].pos.X*alp+RightHand->get().X*(1-alp),
+                    nodes[i].pos.Y*alp+RightHand->get().Y*(1-alp),
+                    nodes[i].pos.Z*alp+RightHand->get().Z*(1-alp)
+                };
             } else {
                 nodeI = -1;
             }
             
             for(int i=0; i<CONNS; i++) {
-                int i1 = (int)conns[i].X, i2 = (int)conns[i].Y;
-                XnPoint3D node1 = { nodes[i1].X, nodes[i1].Y, nodes[i1].Z };
-                XnPoint3D node2 = { nodes[i2].X, nodes[i2].Y, nodes[i2].Z };
-                if(i1==nodeI || i2==nodeI)
-                    glColor4f(1,1,1,0.95);
-                else                
-                    glColor4f(1,1,1,0.65);
-                
-                {
-/*                    int limit = 10;
-                    while(!visible[i1] && limit-->0) {
-                        node1 = Vec3::makeLonger(node2, node1, -5);
-                        visible[i1] = (RightHand->get().Z > nodes[i1].Z);
-                    }
-                    if(limit>0) printf("sucess!");
-                    limit = 10;*/
-                    /*while(!visible[i2] && limit-->0) {
-                        node2 = Vec3::makeLonger(node1, node2, -5);
-                        visible[i2] = (RightHand->get().Z > nodes[i2].Z);
-                    }*/
-                    DrawLine2(node1, node2, 1);
-                }
+                glColor4f(1,1,1,0.75);
+                DrawLine2(nodes[conns[i].src].pos, nodes[conns[i].dst].pos, 1);
             }
         
             glColor4f(
@@ -1043,121 +988,11 @@ void renderSocNet() {
                 0.15,//*mixing + shade*(1-mixing),
                 0.5//visible[i]?1:0.5
             );
-            drawBall(nodes[minDistI], sizes[minDistI]+4.5);
+            drawBall(nodes[minDistI].pos, nodes[minDistI].size+4.5);
         }
         
         glColor4f(1,0.7,0.7,0.45);
         DrawLine2(RightHandProj->get(), RightElbowProj->get(), 4);
-        /*
-        if(drawSkeleton) {
-            DrawLine(RightHandProj->get(), RightElbowProj->get());
-            DrawLine(LeftHandProj->get(), LeftElbowProj->get());
-            
-            glColor4f(rr,gg,bb,aa);
-            glTranslatef(RightHandProj->X(), RightHandProj->Y(), RightHandProj->Z());
-            switch(currentBrush) {
-                case 0: {
-                    float size = 3.5;
-                    gluSphere(quadric, size*currentThickness, 15, 15); break;
-                } case 1: {
-                    glBegin(GL_QUADS);
-                    //Vec3 n = cross(vecB); n.normalize();
-                    //glNormal3f(n.x, n.y, n.z);
-                    float size = 4;
-                    glVertex3f(+size*currentThickness, 0, 0);
-                    glVertex3f(-size*currentThickness, 0, 0);
-                    glVertex3f(-size*currentThickness, 0, 0);
-                    glVertex3f(+size*currentThickness, 0, 0);
-                    glEnd();
-                    break;
-               } case 2: {
-                    float size = 3;
-                    glScalef(size*currentThickness, size*currentThickness, size*currentThickness);
-                    glBegin(GL_QUADS);            
-                         // top
-                        glNormal3f( 0, 1, 0);
-                        glVertex3f( 1, 1,-1);
-                        glVertex3f(-1, 1,-1);
-                        glVertex3f(-1, 1, 1);
-                        glVertex3f( 1, 1, 1);
-                        // bottom 
-                        glNormal3f( 0,-1, 1);
-                        glVertex3f( 1,-1, 1);
-                        glVertex3f(-1,-1, 1);
-                        glVertex3f(-1,-1,-1);
-                        glVertex3f( 1,-1,-1);
-                        // front
-                        glNormal3f( 0, 0, 1);
-                        glVertex3f( 1, 1, 1);
-                        glVertex3f(-1, 1, 1); 
-                        glVertex3f(-1,-1, 1);
-                        glVertex3f( 1,-1, 1);
-                        // back
-                        glNormal3f( 0, 0,-1);
-                        glVertex3f( 1,-1,-1);
-                        glVertex3f(-1,-1,-1);
-                        glVertex3f(-1, 1,-1);
-                        glVertex3f( 1, 1,-1);
-                        // left
-                        glNormal3f(-1, 0, 0);
-                        glVertex3f(-1, 1, 1);
-                        glVertex3f(-1, 1,-1);
-                        glVertex3f(-1,-1,-1);
-                        glVertex3f(-1,-1, 1);
-                        // right
-                        glNormal3f( 1, 0, 0);
-                        glVertex3f( 1, 1,-1);
-                        glVertex3f( 1, 1, 1);
-                        glVertex3f( 1,-1, 1);
-                        glVertex3f( 1,-1,-1);
-                    glEnd();
-                    break; 
-                }
-            }
-            glTranslatef(-RightHandProj->X(), -RightHandProj->Y(), -RightHandProj->Z());
-            glColor4f(1,1,1,1);
-            glBegin(GL_LINES);
-            DrawLimb(aUsers[i], XN_SKEL_RIGHT_ELBOW, XN_SKEL_RIGHT_SHOULDER);
-            glEnd();
-        }*/
-
-    
-        /*
-        // user interface
-        glDisable(GL_DEPTH_TEST);
-        glDisable(GL_LIGHTING);
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        glOrtho(0, 640, 480, 0, -1.0, 1.0);
-        
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-        
-        //glDisable(GL_BLEND);
-        if(drawSquare) {
-            int off = 3;
-            glColor4f(0.1,0.1,0.1,0.8);
-            glBegin(GL_QUADS);
-            glVertex3f(10-off,70+off, 0.0);
-            glVertex3f(70+off,70+off, 0.0);
-            glVertex3f(70+off,10-off, 0.0);
-            glVertex3f(10-off,10-off, 0.0);
-            glEnd();
-
-            glColor4f(rr,gg,bb,aa);
-            glBegin(GL_QUADS);
-            glVertex3f(10,70, 0.0);
-            glVertex3f(70,70, 0.0);
-            glVertex3f(70,10, 0.0);
-            glVertex3f(10,10, 0.0);
-            glEnd();
-        }
-        glColor4f(1,1,1,1);
-        glEnable(GL_BLEND);
-        
-        glEnable(GL_LIGHTING);
-        glEnable(GL_DEPTH_TEST);
-        hadKinect = true;*/
     } else {
         if(hadKinect && time(0)-15 > clickTimer) {
             quitRequested = 1;
