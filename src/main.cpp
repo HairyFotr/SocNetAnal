@@ -12,6 +12,8 @@
 #include <GL/glut.h>
 #include <map>
 #include <time.h>
+#include <iostream>
+#include <fstream>
 
 //---------------------------------------------------------------------------
 // Globals
@@ -42,9 +44,15 @@ int currentBrush = 0;
 int testNum = 0;
 
 time_t clickTimer;
+time_t calibrateTimer;
+
 
 XnUInt32 currentUser = -1;
 
+
+#define XN_CALIBRATION_FILE_NAME "UserCalibration.bin"
+#define CONFIG_XML_PATH "../OpenNIConfig.xml"
+#define SETTINGS_PATH "../settings"
 
 //---------------------------------------------------------------------------
 // Code
@@ -132,8 +140,6 @@ void XN_CALLBACK_TYPE MyPoseInProgress(xn::PoseDetectionCapability& capability, 
     m_Errors[id].second = poseError;
 }
 
-#define XN_CALIBRATION_FILE_NAME "UserCalibration.bin"
-
 // Save calibration to file
 void SaveCalibration() {
     XnUserID aUserIDs[20] = {0};
@@ -179,6 +185,11 @@ void CleanupExit() {
     g_UserGenerator.Release();
     g_Player.Release();
 
+    fprintf(stderr, "Write settings\n");
+    std::ofstream fout(SETTINGS_PATH);
+    fout << testNum;
+    fout.close();
+
     exit(quitRequested);
 }
 
@@ -198,8 +209,8 @@ void glutIdle(void) {
 
 void glutKeyboard(unsigned char key, int x, int y) {
     switch (key) {
-        case 'a' : testNum++; fprintf(stderr, "(%d)", testNum); break;
-        case 's' : testNum--; fprintf(stderr, "(%d)", testNum); break;
+        case 'a' : testNum++; fprintf(stderr, "(%d)", testNum); calibrateTimer = time(0); break;
+        case 's' : testNum--; fprintf(stderr, "(%d)", testNum); calibrateTimer = time(0); break;
         case  27: quitRequested = 1; break;
         //case 's': drawSkeleton= !drawSkeleton; break;
         //case 'y': drawSquare = !drawSquare; break;
@@ -221,6 +232,7 @@ void processMouse(int button, int state, int x, int y) {
             isMouseDown = TRUE;
             if(rr==0&&gg==0&&bb==0) randomColor(rr,gg,bb);
         } else if(button == GLUT_RIGHT_BUTTON) {
+            calibrateTimer = time(0);
             if(drawingLine) {
                 cancelLine = true;
             }            
@@ -310,8 +322,6 @@ void glInit(int* pargc, char** argv) {
     glEnable(GL_TEXTURE_2D);
 }
 
-#define CONFIG_XML_PATH "../OpenNIConfig.xml"
-
 #define CHECK_RC(nRetVal, what)                                      \
     if(nRetVal != XN_STATUS_OK) {                                    \
         printf("%s failed: %s\n", what, xnGetStatusString(nRetVal)); \
@@ -334,6 +344,12 @@ int main(int argc, char** argv) {
         trackerDevice = argv[1];
     }
     
+
+    // read settings file
+    std::ifstream fin(SETTINGS_PATH);
+    fin >> testNum;
+    fin.close(); 
+
     srand(time(NULL));
     clickTimer = time(0);
     #define SOCNET_TRACKER

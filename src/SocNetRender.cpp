@@ -38,6 +38,7 @@ extern xn::UserGenerator g_UserGenerator;
 extern xn::DepthGenerator g_DepthGenerator;
 
 extern time_t clickTimer;
+extern time_t calibrateTimer;
 
 extern int testNum;
 extern int quitRequested;
@@ -799,7 +800,7 @@ void generateGraph() {
                 graphCenter.Y+rand01()*range-range/2.0f,
                 graphCenter.Z+rand01()*range-range/2.0f
             };
-            printf("%f,  %f,  %f\n", randP.X, randP.Y, randP.Z);
+            //printf("%f,  %f,  %f\n", randP.X, randP.Y, randP.Z);
             float dist=100000;
             XnPoint3D distP = {1,1,1};
             for(int j=0; j<i-1; j++) {
@@ -814,7 +815,7 @@ void generateGraph() {
                 bestDistP = { distP.X, distP.Y, distP.Z };
             }
         }
-        printf("%f,  %f,  %f\n", bestDistP.X, bestDistP.Y, bestDistP.Z);
+        //printf("%f,  %f,  %f\n", bestDistP.X, bestDistP.Y, bestDistP.Z);
         nodes[i].pos = { bestDistP.X, bestDistP.Y, bestDistP.Z };
         nodes[i].size = 10+rand01()*10;
         float r,g,b;
@@ -888,7 +889,7 @@ void renderSocNet() {
               0, 0, -1);// up vector 
     
     glMultMatrixd(GL_MatrixT);
-    glRotatef(25,0,0,1); // rotation correction
+    glRotatef(testNum,0,0,1); // rotation correction
     glRotatef(-8,0,1,0);
     
     
@@ -906,93 +907,146 @@ void renderSocNet() {
     g_UserGenerator.GetUsers(aUsers, nUsers);
     
     if(nUsers>0 && currentUser>=0 && currentUser<=nUsers) {
-        int i = currentUser-1;
-        {
-            // oh, wow
-            XnPoint3D handRight0 = GetLimbPosition(aUsers[i], XN_SKEL_RIGHT_HAND);
-            XnPoint3D elbowRight0 = GetLimbPosition(aUsers[i], XN_SKEL_RIGHT_ELBOW);
-            handRight0 = Vec3::makeLonger(elbowRight0, handRight0, -170-27);
-            XnPoint3D handRight0proj = getProj(handRight0);
-            XnPoint3D handRight = convertKinect(handRight0);
-            XnPoint3D handRightproj = convertKinect(handRight0proj);
-            XnPoint3D elbowRightproj = convertKinect(getProj(elbowRight0));
+        //calibration plane
+        if(time(0)-2 < calibrateTimer && headpos != NULL) {
+            glColor4f(1,0,0,1);
+            glPushMatrix();
+            glTranslatef(0, 0, -250);
+            glRotatef(cnt,1,1,0);
+            glScalef(75,75,75);
+            glBegin(GL_QUADS);            
+                glColor4f(0,0.75,0,1);
+                // left
+                glNormal3f(-1, 0, 0);
+                glVertex3f(-1, 1, 1);
+                glVertex3f(-1, 1,-1);
+                glVertex3f(-1,-1,-1);
+                glVertex3f(-1,-1, 1);
+                // right
+                glNormal3f( 1, 0, 0);
+                glVertex3f( 1, 1,-1);
+                glVertex3f( 1, 1, 1);
+                glVertex3f( 1,-1, 1);
+                glVertex3f( 1,-1,-1);
 
-            XnPoint3D handLeft0 = GetLimbPosition(aUsers[i], XN_SKEL_LEFT_HAND);
-            XnPoint3D elbowLeft0 = GetLimbPosition(aUsers[i], XN_SKEL_LEFT_ELBOW);
-            handLeft0 = Vec3::makeLonger(elbowLeft0, handLeft0, -170-27);
-            XnPoint3D handLeft0proj = getProj(handLeft0);
-            XnPoint3D handLeft = convertKinect(handLeft0);
-            XnPoint3D handLeftproj = convertKinect(handLeft0proj);
-            XnPoint3D elbowLeftproj = convertKinect(getProj(elbowLeft0));
+                glColor4f(0,0.75,0,1);
+                // top
+                glNormal3f( 0, 1, 0);
+                glVertex3f( 1, 1,-1);
+                glVertex3f(-1, 1,-1);
+                glVertex3f(-1, 1, 1);
+                glVertex3f( 1, 1, 1);
+                // bottom 
+                glNormal3f( 0,-1, 1);
+                glVertex3f( 1,-1, 1);
+                glVertex3f(-1,-1, 1);
+                glVertex3f(-1,-1,-1);
+                glVertex3f( 1,-1,-1);
 
-            if(firstUser) {
-                int s = 25; //smoothing
-                RightHand = new SmoothPoint(handRight, s, 1);
-                RightHandProj = new SmoothPoint(handRightproj, s, 1);
-                RightElbowProj = new SmoothPoint(elbowRightproj, s, 1);
-                
-                LeftHand = new SmoothPoint(handLeft, s, 1);
-                LeftHandProj = new SmoothPoint(handLeftproj, s, 1);
-                LeftElbowProj = new SmoothPoint(elbowLeftproj, s, 1);
-            } else {
-                RightHand->insert(handRight);
-                RightHandProj->insert(handRightproj);
-                RightElbowProj->insert(elbowRightproj);
-
-                LeftHand->insert(handLeft);
-                LeftHandProj->insert(handLeftproj);
-                LeftElbowProj->insert(elbowLeftproj);
-            }
-        }
-
-        XnPoint3D head = getProj(GetLimbPosition(aUsers[i], XN_SKEL_HEAD));
-        if(firstUser) {
-            headpos = new SmoothPoint(head, 50, 0);
-            graphCenter = convertKinect(headpos->get());
-            graphThread = boost::thread(generateGraph);
+                glColor4f(0,0,0.75,1);
+                // front
+                glNormal3f( 0, 0, 1);
+                glVertex3f( 1, 1, 1);
+                glVertex3f(-1, 1, 1); 
+                glVertex3f(-1,-1, 1);
+                glVertex3f( 1,-1, 1);
+                // back
+                glNormal3f( 0, 0,-1);
+                glVertex3f( 1,-1,-1);
+                glVertex3f(-1,-1,-1);
+                glVertex3f(-1, 1,-1);
+                glVertex3f( 1, 1,-1);//*/
+            glEnd();
+            glPopMatrix();
         } else {
-            headpos->insert(head);
-        }
-        firstUser = false;
+            int i = currentUser-1;
+            {
+                // oh, wow
+                XnPoint3D handRight0 = GetLimbPosition(aUsers[i], XN_SKEL_RIGHT_HAND);
+                XnPoint3D elbowRight0 = GetLimbPosition(aUsers[i], XN_SKEL_RIGHT_ELBOW);
+                handRight0 = Vec3::makeLonger(elbowRight0, handRight0, -170-27);
+                XnPoint3D handRight0proj = getProj(handRight0);
+                XnPoint3D handRight = convertKinect(handRight0);
+                XnPoint3D handRightproj = convertKinect(handRight0proj);
+                XnPoint3D elbowRightproj = convertKinect(getProj(elbowRight0));
 
-        if(graphGenerated) {
-            float minDist=100000000;
-            int minDistI=0;
-            for(int i=0; i<NODES; i++) {
-                float dist = distance(RightHand->get(), nodes[i].pos);
-                if(dist < minDist) { minDist = dist; minDistI = i; }
-                
-                drawNode(nodes[i]);
+                XnPoint3D handLeft0 = GetLimbPosition(aUsers[i], XN_SKEL_LEFT_HAND);
+                XnPoint3D elbowLeft0 = GetLimbPosition(aUsers[i], XN_SKEL_LEFT_ELBOW);
+                handLeft0 = Vec3::makeLonger(elbowLeft0, handLeft0, -170-27);
+                XnPoint3D handLeft0proj = getProj(handLeft0);
+                XnPoint3D handLeft = convertKinect(handLeft0);
+                XnPoint3D handLeftproj = convertKinect(handLeft0proj);
+                XnPoint3D elbowLeftproj = convertKinect(getProj(elbowLeft0));
+
+                if(firstUser) {
+                    int s = 25; //smoothing
+                    RightHand = new SmoothPoint(handRight, s, 1);
+                    RightHandProj = new SmoothPoint(handRightproj, s, 1);
+                    RightElbowProj = new SmoothPoint(elbowRightproj, s, 1);
+                    
+                    LeftHand = new SmoothPoint(handLeft, s, 1);
+                    LeftHandProj = new SmoothPoint(handLeftproj, s, 1);
+                    LeftElbowProj = new SmoothPoint(elbowLeftproj, s, 1);
+                } else {
+                    RightHand->insert(handRight);
+                    RightHandProj->insert(handRightproj);
+                    RightElbowProj->insert(elbowRightproj);
+
+                    LeftHand->insert(handLeft);
+                    LeftHandProj->insert(handLeftproj);
+                    LeftElbowProj->insert(elbowLeftproj);
+                }
             }
-            if(isMouseDown) {
-                if(nodeI==-1) nodeI = minDistI; else minDistI = nodeI;
-                int i = nodeI;
-                float alp = 0.8;
-                nodes[i].pos = {
-                    nodes[i].pos.X*alp+RightHand->get().X*(1-alp),
-                    nodes[i].pos.Y*alp+RightHand->get().Y*(1-alp),
-                    nodes[i].pos.Z*alp+RightHand->get().Z*(1-alp)
-                };
+
+            XnPoint3D head = getProj(GetLimbPosition(aUsers[i], XN_SKEL_HEAD));
+            if(firstUser) {
+                headpos = new SmoothPoint(head, 50, 0);
+                graphCenter = convertKinect(headpos->get());
+                graphThread = boost::thread(generateGraph);
             } else {
-                nodeI = -1;
+                headpos->insert(head);
+            }
+            firstUser = false;
+
+            if(graphGenerated) {
+                float minDist=100000000;
+                int minDistI=0;
+                for(int i=0; i<NODES; i++) {
+                    float dist = distance(RightHand->get(), nodes[i].pos);
+                    if(dist < minDist) { minDist = dist; minDistI = i; }
+                    
+                    drawNode(nodes[i]);
+                }
+                if(isMouseDown) {
+                    if(nodeI==-1) nodeI = minDistI; else minDistI = nodeI;
+                    int i = nodeI;
+                    float alp = 0.8;
+                    nodes[i].pos = {
+                        nodes[i].pos.X*alp+RightHand->get().X*(1-alp),
+                        nodes[i].pos.Y*alp+RightHand->get().Y*(1-alp),
+                        nodes[i].pos.Z*alp+RightHand->get().Z*(1-alp)
+                    };
+                } else {
+                    nodeI = -1;
+                }
+                
+                for(int i=0; i<CONNS; i++) {
+                    glColor4f(1,1,1,0.75);
+                    DrawLine2(nodes[conns[i].src].pos, nodes[conns[i].dst].pos, 1);
+                }
+            
+                glColor4f(
+                    0.15,//*mixing + shade*(1-mixing),
+                    0.15,//*mixing + shade*(1-mixing),
+                    0.15,//*mixing + shade*(1-mixing),
+                    0.5//visible[i]?1:0.5
+                );
+                drawBall(nodes[minDistI].pos, nodes[minDistI].size+4.5);
             }
             
-            for(int i=0; i<CONNS; i++) {
-                glColor4f(1,1,1,0.75);
-                DrawLine2(nodes[conns[i].src].pos, nodes[conns[i].dst].pos, 1);
-            }
-        
-            glColor4f(
-                0.15,//*mixing + shade*(1-mixing),
-                0.15,//*mixing + shade*(1-mixing),
-                0.15,//*mixing + shade*(1-mixing),
-                0.5//visible[i]?1:0.5
-            );
-            drawBall(nodes[minDistI].pos, nodes[minDistI].size+4.5);
+            glColor4f(1,0.7,0.7,0.45);
+            DrawLine2(RightHandProj->get(), RightElbowProj->get(), 4);
         }
-        
-        glColor4f(1,0.7,0.7,0.45);
-        DrawLine2(RightHandProj->get(), RightElbowProj->get(), 4);
     } else {
         if(hadKinect && time(0)-15 > clickTimer) {
             quitRequested = 1;
